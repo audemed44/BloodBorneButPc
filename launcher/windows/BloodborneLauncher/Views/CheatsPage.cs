@@ -41,6 +41,9 @@ namespace BloodborneLauncher.Views
             Group("Items");
             Cheat(SymbolRegular.Drop24, "Blood Vials", "cheat_vials", "cheat_vials_amount");
             Cheat(SymbolRegular.Flash24, "Quicksilver Bullets", "cheat_bullets", "cheat_bullets_amount");
+            SettingToggle(SymbolRegular.Globe24, "Keep Blood Vials and Bullets online",
+                "Online play turns every cheat off. With this on, the two above keep refilling while online; the others stay off. Applies to the next game",
+                "cheat_items_online");
             IniToggle(SymbolRegular.Beaker24, "Infinite consumables",
                 "Molotovs, throwing knives, pebbles, antidotes, papers and the like are not used up (not Blood Vials or Bullets, which are above, and not insight items)",
                 "cheat_consumables");

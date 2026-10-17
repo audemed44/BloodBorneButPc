@@ -168101,10 +168101,10 @@ index 0000000..693ca50
 +
 +} // namespace BbSettings
 diff --git a/gpu/shim/bbport_overlay.cpp b/gpu/shim/bbport_overlay.cpp
-index 83e5538..6a75445 100644
+index 83e5538..3ef2808 100644
 --- a/gpu/shim/bbport_overlay.cpp
 +++ b/gpu/shim/bbport_overlay.cpp
-@@ -1,805 +1,1197 @@
+@@ -1,805 +1,1196 @@
 -// SPDX-License-Identifier: GPL-2.0-or-later
 -#include "bbport_overlay.h"
 -
@@ -169716,9 +169716,8 @@ index 83e5538..6a75445 100644
 +                                     "При смерти отголоски остаются у вас, в пятне крови их нет. Выкл. "
 +                                     "возвращает код игры. Сохранённые отголоски остаются в сохранении."));
 +    {
-+        static const char* const multipliers[] = {"x1", "x2", "x5", "x10"};
-+        const char* const names[] = {BbSettings::MenuText("x1 (off)", "x1 (выкл.)"), multipliers[1], multipliers[2],
-+                                     multipliers[3]};
++        const char* const names[] = {BbSettings::MenuText("x1 (off)", "x1 (выкл.)"), "x1.25", "x1.5", "x1.75", "x2",
++                                     "x2.5", "x3", "x4", "x5", "x10"};
 +        CheatLevels(BbSettings::MenuText("Blood Echo multiplier", "Множитель отголосков"), s.cheat_echo_multiplier,
 +                    BbSettings::CheatEchoMultipliers, names, BbEngine::Cheats::EchoMultiplier,
 +                    BbSettings::MenuText(
@@ -170733,10 +170732,10 @@ index f88cc52..5563f99 100644
 +#define BB_SECTION_JOIN(a, b) BB_SECTION_JOIN2(a, b)
 +#define BB_SECTION(id) BbSections::Scope BB_SECTION_JOIN(bb_section_scope_, __LINE__){BbSections::id}
 diff --git a/gpu/shim/bbport_settings.cpp b/gpu/shim/bbport_settings.cpp
-index cf4fbd8..8f47700 100644
+index cf4fbd8..42ba4c1 100644
 --- a/gpu/shim/bbport_settings.cpp
 +++ b/gpu/shim/bbport_settings.cpp
-@@ -1,383 +1,612 @@
+@@ -1,383 +1,637 @@
 -#ifdef _WIN32
 -#ifndef NOMINMAX
 -#define NOMINMAX
@@ -171179,8 +171178,7 @@ index cf4fbd8..8f47700 100644
 +                                                   : "off";
 +}
 +
-+// cheat_gun_range: off or one of CheatGunRanges (percent); cheat_echo_multiplier: one of
-+// CheatEchoMultipliers. Anything else is the game's own (off / 1).
++// cheat_gun_range: off or one of CheatGunRanges (percent). Anything else is the game's own (off).
 +template <std::size_t N>
 +int CheatChoice(const std::string& key, const std::string& value, const int (&choices)[N], const char* expected) {
 +    if (value == "off") {
@@ -171193,6 +171191,32 @@ index cf4fbd8..8f47700 100644
 +    }
 +    std::printf("Settings: unknown %s '%s' (expected %s); %d\n", key.c_str(), value.c_str(), expected, choices[0]);
 +    return choices[0];
++}
++
++// cheat_echo_multiplier: the multiplier ("1.5") as one of CheatEchoMultipliers (percent); anything
++// else is the game's own (x1).
++int EchoMultiplierChoice(const std::string& value) {
++    char* end = nullptr;
++    const double v = std::strtod(value.c_str(), &end);
++    if (!value.empty() && end && *end == '\0' && std::isfinite(v) && v > 0 && v <= 10) {
++        const int percent = int(std::lround(v * 100));
++        if (std::find(std::begin(CheatEchoMultipliers), std::end(CheatEchoMultipliers), percent) !=
++            std::end(CheatEchoMultipliers)) {
++            return percent;
++        }
++    }
++    std::printf("Settings: unknown cheat_echo_multiplier '%s' (expected 1, 1.25, 1.5, 1.75, 2, 2.5, 3, 4, 5 or 10); 1\n",
++                value.c_str());
++    return CheatEchoMultipliers[0];
++}
++
++std::string EchoMultiplierText(int percent) {
++    std::string text = std::to_string(percent / 100);
++    if (percent % 100) {
++        text += '.' + std::to_string(percent % 100 / 10);
++        if (percent % 10) text += std::to_string(percent % 10);
++    }
++    return text;
 +}
 +
 +void Set(Values& v, const std::string& key, const std::string& value) {
@@ -171383,7 +171407,7 @@ index cf4fbd8..8f47700 100644
 +    } else if (key == "cheat_gun_range") {
 +        v.cheat_gun_range = CheatChoice(key, value, CheatGunRanges, "off, 150, 200 or 300");
 +    } else if (key == "cheat_echo_multiplier") {
-+        v.cheat_echo_multiplier = CheatChoice(key, value, CheatEchoMultipliers, "1, 2, 5 or 10");
++        v.cheat_echo_multiplier = EchoMultiplierChoice(value);
 +    } else if (key == "output_res") {
 +        if (value == "auto") {
 +            v.output_res = OutputAuto;
@@ -171652,7 +171676,7 @@ index cf4fbd8..8f47700 100644
 +    put("cheat_stealth", flag(v.cheat_stealth));
 +    put("cheat_gun_range", v.cheat_gun_range == 0 ? "off" : std::to_string(v.cheat_gun_range.load()));
 +    put("cheat_keep_echoes", flag(v.cheat_keep_echoes));
-+    put("cheat_echo_multiplier", std::to_string(v.cheat_echo_multiplier.load()));
++    put("cheat_echo_multiplier", EchoMultiplierText(v.cheat_echo_multiplier));
 +    put("cheat_no_durability", flag(v.cheat_no_durability));
 +    put("cheat_consumables", flag(v.cheat_consumables));
 +    put("output_res", v.output_res == OutputAuto ? std::string("auto")
@@ -171733,7 +171757,7 @@ index cf4fbd8..8f47700 100644
 +
 +} // namespace BbSettings
 diff --git a/gpu/shim/bbport_settings.h b/gpu/shim/bbport_settings.h
-index c0e8a94..14e01ef 100644
+index c0e8a94..3391a72 100644
 --- a/gpu/shim/bbport_settings.h
 +++ b/gpu/shim/bbport_settings.h
 @@ -22,7 +22,14 @@ inline bool IsFrameUpscaler(int upscaler) {
@@ -171770,7 +171794,7 @@ index c0e8a94..14e01ef 100644
      {"effect_dynamic_shadows", "Shadows from dynamic lights", "Тени от динамических источников", true},
      {"effect_ssr", "Screen-space reflections (not in original game)", "Отражения SSR (не было в игре)", false},
      {"skip_intro", "Skip startup intros", "Пропуск заставок при запуске", false},
-@@ -45,11 +54,52 @@ inline constexpr Effect Effects[] = {
+@@ -45,11 +54,53 @@ inline constexpr Effect Effects[] = {
      {"debug_menu", "Debug menu (requires font files)", "Debug menu (нужны файлы шрифтов)", false},
  };
  inline constexpr int EffectCount = int(sizeof(Effects) / sizeof(Effects[0]));
@@ -171795,8 +171819,9 @@ index c0e8a94..14e01ef 100644
 +inline constexpr int CheatOff = 0, CheatInfinite = -1, CheatMaxAmount = 99;
 +/// cheat_gun_range: "off" (0) or the firearm bullets' range in percent.
 +inline constexpr int CheatGunRanges[] = {0, 150, 200, 300};
-+/// cheat_echo_multiplier: Blood Echoes from kills times this (1: the game's own).
-+inline constexpr int CheatEchoMultipliers[] = {1, 2, 5, 10};
++/// cheat_echo_multiplier: Blood Echoes from kills times this, in percent (100: the game's own);
++/// bbport.ini holds the multiplier ("1.5").
++inline constexpr int CheatEchoMultipliers[] = {100, 125, 150, 175, 200, 250, 300, 400, 500, 1000};
 +/// HDR output (hdr_paper_white / hdr_peak in nits, hdr_boost 0..1): defaults and ranges.
 +inline constexpr float HdrPaperWhiteDefault = 200.0f, HdrPaperWhiteMin = 10.0f, HdrPaperWhiteMax = 500.0f;
 +inline constexpr float HdrPeakDefault = 1000.0f, HdrPeakMin = 10.0f, HdrPeakMax = 4000.0f;
@@ -171827,7 +171852,7 @@ index c0e8a94..14e01ef 100644
  
  struct Values {
      std::atomic<MenuLanguage> menu_language{MenuLanguage::English};
-@@ -65,6 +115,14 @@ struct Values {
+@@ -65,6 +116,14 @@ struct Values {
      std::atomic<float> reactive_max{0.9f};
      std::atomic<int> debug_view{DebugNone};
      std::atomic<bool> show_fps{false};
@@ -171842,7 +171867,7 @@ index c0e8a94..14e01ef 100644
      /// The settings menu's position (fraction of the screen), -1 until it is moved.
      std::atomic<float> menu_x{-1.0f}, menu_y{-1.0f};
      // FSR 4 checks (menu): the provider's auto exposure, the jitter sign it is given.
-@@ -77,14 +135,40 @@ struct Values {
+@@ -77,14 +136,40 @@ struct Values {
      std::atomic<bool> widescreen{true},pc_controls{true},mouse_camera{true},mouse_menu{true};
      std::atomic<bool> mouse_invert_x{false},mouse_invert_y{false},mouse_auto_rotation{false};
      std::atomic<int> mouse_sensitivity{5};
@@ -171863,7 +171888,7 @@ index c0e8a94..14e01ef 100644
 +    std::atomic<bool> cheat_stamina{false}, cheat_stealth{false}, cheat_keep_echoes{false},
 +        cheat_no_durability{false}, cheat_consumables{false};
 +    /// One of CheatGunRanges / CheatEchoMultipliers; live.
-+    std::atomic<int> cheat_gun_range{0}, cheat_echo_multiplier{1};
++    std::atomic<int> cheat_gun_range{0}, cheat_echo_multiplier{100};
      /// Borderless fullscreen window at the desktop size (F11 toggles; BB_FULLSCREEN overrides).
      std::atomic<bool> fullscreen{false};
 +    /// HDR output (hdr, BB_HDR): the game's SDR picture shown in an HDR swapchain when the
@@ -171883,7 +171908,7 @@ index c0e8a94..14e01ef 100644
      /// Live resolution and preset changes (run.sh): 0 off by default (startup patch, fastest
      /// on the Steam Deck and older GPUs), -1 auto (strong discrete GPUs), 1 on. On restart.
      std::atomic<int> live_resolution{0};
-@@ -100,10 +184,12 @@ struct Values {
+@@ -100,10 +185,12 @@ struct Values {
      int startup_model_lod = 0;
      int startup_output_res = OutputDefault;
      int startup_live_resolution = 0;
@@ -172952,10 +172977,10 @@ index eff8103..f9db012 100644
      }
 diff --git a/gpu/shim/engine/cheats.cpp b/gpu/shim/engine/cheats.cpp
 new file mode 100644
-index 0000000..a9898d8
+index 0000000..32f94f9
 --- /dev/null
 +++ b/gpu/shim/engine/cheats.cpp
-@@ -0,0 +1,1070 @@
+@@ -0,0 +1,1075 @@
 +// SPDX-License-Identifier: GPL-3.0-or-later
 +// Live cheats: Blood Vials (goods 1000) and Quicksilver Bullets (goods 900), each off, infinite
 +// or kept at an amount (bbport.ini cheat_vials / cheat_bullets, the overlay's Cheats section).
@@ -173536,17 +173561,23 @@ index 0000000..a9898d8
 +    return shared;
 +}
 +
-+// BB_ONLINE_ITEM_CHEATS=1 (the launcher's "Keep Blood Vials and Bullets online"): the Blood Vial
-+// and Quicksilver Bullet cheats still run online; every other cheat stays off there.
-+bool ItemsShared() {
-+    static const bool shared = [] {
++// BB_ONLINE_CHEATS=1 (the launcher's "Keep some cheats online"): Blood Vials, Quicksilver Bullets
++// and the echo multiplier still run online; every other cheat stays off there.
++bool OnlineKept() {
++    static const bool kept = [] {
 +        if (!SharedWorld()) return false;
-+        const char* items = std::getenv("BB_ONLINE_ITEM_CHEATS");
-+        const bool kept = items && items[0] == '1';
-+        if (kept) std::printf("Cheats: Blood Vials and Quicksilver Bullets kept on while playing online\n");
-+        return !kept;
++        const char* cheats = std::getenv("BB_ONLINE_CHEATS");
++        const bool on = cheats && cheats[0] == '1';
++        if (on) std::printf("Cheats: Blood Vials, Quicksilver Bullets and the echo multiplier kept on online\n");
++        return on;
 +    }();
-+    return shared;
++    return kept;
++}
++
++// Whether a cheat is held off this session (online, and not one OnlineKept lets through).
++bool HeldOff(Which which) {
++    if (!SharedWorld()) return false;
++    return !OnlineKept() || (which != Vials && which != Bullets && which != EchoMultiplier);
 +}
 +
 +int SettingOf(const Extra& e, const BbSettings::Values& s) {
@@ -173562,11 +173593,11 @@ index 0000000..a9898d8
 +                   std::end(BbSettings::CheatGunRanges) ? v : 0;
 +    }
 +    case EchoMultiplier: {
-+        // Off is 0 here (x1 changes nothing).
++        // Percent; off is 0 here (x1 changes nothing).
 +        const int v = s.cheat_echo_multiplier.load(std::memory_order_relaxed);
-+        return v > 1 && std::find(std::begin(BbSettings::CheatEchoMultipliers),
-+                                  std::end(BbSettings::CheatEchoMultipliers), v) !=
-+                            std::end(BbSettings::CheatEchoMultipliers) ? v : 0;
++        return v > 100 && std::find(std::begin(BbSettings::CheatEchoMultipliers),
++                                    std::end(BbSettings::CheatEchoMultipliers), v) !=
++                              std::end(BbSettings::CheatEchoMultipliers) ? v : 0;
 +    }
 +    default: return 0;
 +    }
@@ -173716,7 +173747,7 @@ index 0000000..a9898d8
 +        for (std::size_t i = 0; i + 4 <= want.size(); i += 4) {
 +            std::uint32_t v = 0;
 +            std::memcpy(&v, want.data() + i, 4);
-+            v *= std::uint32_t(mode);
++            v = std::uint32_t((std::uint64_t(v) * std::uint32_t(mode) + 50) / 100); // mode is percent
 +            std::memcpy(want.data() + i, &v, 4);
 +        }
 +        break;
@@ -173735,7 +173766,7 @@ index 0000000..a9898d8
 +        break;
 +    case KeepEchoes: std::printf(mode ? "Cheats: keep Blood Echoes on death on\n" : "Cheats: keep Blood Echoes on death off, code restored\n"); break;
 +    case EchoMultiplier:
-+        if (mode) std::printf("Cheats: echo multiplier x%d\n", mode);
++        if (mode) std::printf("Cheats: echo multiplier x%g\n", mode / 100.0);
 +        else std::printf("Cheats: echo multiplier off, params restored\n");
 +        break;
 +    case NoDurability: std::printf("Cheats: weapon durability kept full %s\n", mode ? "on" : "off"); break;
@@ -173968,16 +173999,15 @@ index 0000000..a9898d8
 +        g_add_echoes.store(0, std::memory_order_relaxed);
 +        g_add_insight.store(0, std::memory_order_relaxed);
 +    }
-+    const bool items_shared = ItemsShared();
-+    const int settings[2] = {items_shared ? BbSettings::CheatOff : s.cheat_vials.load(std::memory_order_relaxed),
-+                             items_shared ? BbSettings::CheatOff : s.cheat_bullets.load(std::memory_order_relaxed)};
++    const int settings[2] = {HeldOff(Vials) ? BbSettings::CheatOff : s.cheat_vials.load(std::memory_order_relaxed),
++                             HeldOff(Bullets) ? BbSettings::CheatOff : s.cheat_bullets.load(std::memory_order_relaxed)};
 +    bool idle = g_add_echoes.load(std::memory_order_relaxed) <= 0 && g_add_insight.load(std::memory_order_relaxed) <= 0;
 +    for (int i = 0; i < 2; ++i) {
 +        const Cheat& c = g_cheats[i];
 +        idle = idle && (c.disabled || (settings[i] == BbSettings::CheatOff && c.pending == BbSettings::CheatOff &&
 +                                       c.active == BbSettings::CheatOff));
 +    }
-+    for (const Extra& e : g_extras) idle = idle && (e.disabled || ((shared || !SettingOf(e, s)) && !e.pending && !e.active));
++    for (const Extra& e : g_extras) idle = idle && (e.disabled || ((HeldOff(e.which) || !SettingOf(e, s)) && !e.pending && !e.active));
 +    if (idle) return; // all off: nothing read, nothing called
 +    const auto now = Clock::now();
 +    for (int i = 0; i < 2; ++i) {
@@ -173990,7 +174020,7 @@ index 0000000..a9898d8
 +    }
 +    for (Extra& e : g_extras) {
 +        if (e.disabled) continue;
-+        const int value = shared ? 0 : SettingOf(e, s);
++        const int value = HeldOff(e.which) ? 0 : SettingOf(e, s);
 +        if (value != e.pending) { e.pending = value; e.pending_since = now; }
 +        if (e.pending != e.active && now - e.pending_since >= kDebounce) Switch(e, e.pending);
 +    }
@@ -201348,7 +201378,7 @@ index 0000000..b7ddf6c
 +if __name__ == '__main__':
 +    unittest.main()
 diff --git a/tests/test_settings.cpp b/tests/test_settings.cpp
-index 593fed4..8501ba0 100644
+index 593fed4..5b1cdc6 100644
 --- a/tests/test_settings.cpp
 +++ b/tests/test_settings.cpp
 @@ -1,58 +1,58 @@
@@ -201462,7 +201492,7 @@ index 593fed4..8501ba0 100644
      s.camera_controls = true;
      s.camera_fov_scale = 1.25f;
      s.camera_distance_scale = 0.80f;
-@@ -84,6 +91,122 @@ int main() {
+@@ -84,6 +91,131 @@ int main() {
      { std::ofstream file(path); file << "camera_fov_scale=nan\ncamera_distance_scale=-10\ncamera_height_scale=inf\n"; }
      BbSettings::Load();
      assert(s.camera_fov_scale == 1.0f && s.camera_distance_scale == 0.5f && s.camera_height_scale == 1.0f);
@@ -201491,7 +201521,7 @@ index 593fed4..8501ba0 100644
 +    assert(s.cheat_vials == BbSettings::CheatOff && s.cheat_bullets == BbSettings::CheatOff);
 +    BbSettings::Save();
 +    assert(Read(path).find("cheat_vials=off\n") != std::string::npos);
-+    // The other cheats: 0/1 switches, firearm range off/150/200/300, echo multiplier 1/2/5/10;
++    // The other cheats: 0/1 switches, firearm range off/150/200/300, echo multiplier 1 to 10 (percent inside);
 +    // written back as read, anything else the game's own.
 +    assert(Read(path).find("cheat_gun_range=off\n") != std::string::npos);
 +    assert(Read(path).find("cheat_echo_multiplier=1\n") != std::string::npos);
@@ -201503,7 +201533,7 @@ index 593fed4..8501ba0 100644
 +    }
 +    BbSettings::Load();
 +    assert(s.cheat_stamina && s.cheat_stealth && s.cheat_keep_echoes && s.cheat_no_durability && s.cheat_consumables);
-+    assert(s.cheat_gun_range == 200 && s.cheat_echo_multiplier == 5);
++    assert(s.cheat_gun_range == 200 && s.cheat_echo_multiplier == 500);
 +    BbSettings::Save();
 +    for (const char* line : {"cheat_stamina=1\n", "cheat_stealth=1\n", "cheat_gun_range=200\n", "cheat_keep_echoes=1\n",
 +                             "cheat_echo_multiplier=5\n", "cheat_no_durability=1\n", "cheat_consumables=1\n"}) {
@@ -201512,17 +201542,26 @@ index 593fed4..8501ba0 100644
 +    {
 +        std::ofstream file(path);
 +        file << "cheat_stamina=0\ncheat_stealth=0\ncheat_gun_range=250\ncheat_keep_echoes=0\n"
-+                "cheat_echo_multiplier=3\ncheat_no_durability=0\ncheat_consumables=0\n";
++                "cheat_echo_multiplier=7\ncheat_no_durability=0\ncheat_consumables=0\n";
 +    }
 +    BbSettings::Load();
 +    assert(!s.cheat_stamina && !s.cheat_stealth && !s.cheat_keep_echoes && !s.cheat_no_durability && !s.cheat_consumables);
-+    assert(s.cheat_gun_range == 0 && s.cheat_echo_multiplier == 1);
++    assert(s.cheat_gun_range == 0 && s.cheat_echo_multiplier == 100);
 +    { std::ofstream file(path); file << "cheat_gun_range=300\ncheat_echo_multiplier=10\n"; }
 +    BbSettings::Load();
-+    assert(s.cheat_gun_range == 300 && s.cheat_echo_multiplier == 10);
++    assert(s.cheat_gun_range == 300 && s.cheat_echo_multiplier == 1000);
++    { std::ofstream file(path); file << "cheat_echo_multiplier=1.5\n"; }
++    BbSettings::Load();
++    assert(s.cheat_echo_multiplier == 150);
++    BbSettings::Save();
++    assert(Read(path).find("cheat_echo_multiplier=1.5\n") != std::string::npos);
++    { std::ofstream file(path); file << "cheat_echo_multiplier=1.25\n"; }
++    BbSettings::Load();
++    BbSettings::Save();
++    assert(s.cheat_echo_multiplier == 125 && Read(path).find("cheat_echo_multiplier=1.25\n") != std::string::npos);
 +    { std::ofstream file(path); file << "cheat_gun_range=off\ncheat_echo_multiplier=x2\n"; }
 +    BbSettings::Load();
-+    assert(s.cheat_gun_range == 0 && s.cheat_echo_multiplier == 1);
++    assert(s.cheat_gun_range == 0 && s.cheat_echo_multiplier == 100);
 +    BbSettings::Save();
 +    assert(Read(path).find("cheat_gun_range=off\n") != std::string::npos);
 +    assert(Read(path).find("cheat_echo_multiplier=1\n") != std::string::npos);

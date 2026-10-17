@@ -41,9 +41,6 @@ namespace BloodborneLauncher.Views
             Group("Items");
             Cheat(SymbolRegular.Drop24, "Blood Vials", "cheat_vials", "cheat_vials_amount");
             Cheat(SymbolRegular.Flash24, "Quicksilver Bullets", "cheat_bullets", "cheat_bullets_amount");
-            SettingToggle(SymbolRegular.Globe24, "Keep Blood Vials and Bullets online",
-                "Online play turns every cheat off. With this on, the two above keep refilling while online; the others stay off. Applies to the next game",
-                "cheat_items_online");
             IniToggle(SymbolRegular.Beaker24, "Infinite consumables",
                 "Molotovs, throwing knives, pebbles, antidotes, papers and the like are not used up (not Blood Vials or Bullets, which are above, and not insight items)",
                 "cheat_consumables");
@@ -59,9 +56,19 @@ namespace BloodborneLauncher.Views
             Group("Blood Echoes");
             IniToggle(SymbolRegular.Heart24, "Keep echoes on death", "Dying never drops your Blood Echoes, so there is nothing to pick back up", "cheat_keep_echoes");
             ComboRow(SymbolRegular.ArrowTrendingLines24, "Echoes from kills", "Enemies already loaded give the new amount after you rest at a lamp or reload",
-                new[] { new Choice("Normal", "1"), new Choice("x2", "2"), new Choice("x5", "5"), new Choice("x10", "10") },
+                new[]
+                {
+                    new Choice("Normal", "1"), new Choice("x1.25", "1.25"), new Choice("x1.5", "1.5"), new Choice("x1.75", "1.75"),
+                    new Choice("x2", "2"), new Choice("x2.5", "2.5"), new Choice("x3", "3"), new Choice("x4", "4"),
+                    new Choice("x5", "5"), new Choice("x10", "10"),
+                },
                 () => Ini.Get("cheat_echo_multiplier", "1"), v => Ini.Set("cheat_echo_multiplier", v));
             Add(Card(SymbolRegular.Add24, "Add echoes or insight", "In the in-game menu (Insert or L3 + R3): +1,000, +10,000, +100,000 echoes and +1 insight", null, out _));
+
+            Group("Online");
+            SettingToggle(SymbolRegular.Globe24, "Keep some cheats online",
+                "Online play turns every cheat off. With this on, Blood Vials, Quicksilver Bullets and Echoes from kills keep working online; the others stay off. Applies to the next game",
+                "cheat_online");
         }
 
         /// <summary>A mode row and its amount slider for one cheat key.</summary>

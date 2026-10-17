@@ -22,11 +22,14 @@ namespace BloodborneLauncher.Core
     /// </summary>
     public static class Updater
     {
-        public const string Repository = "Awakenchan/BloodBorneButPc";
+        // This fork's releases (.github/workflows/release.yml builds them).
+        public const string Repository = "audemed44/BloodBorneButPc";
         public static string ReleasesPage => $"https://github.com/{Repository}/releases";
 
-        /// <summary>The engine build this launcher is made for (package.json "engine").</summary>
-        public const string EngineId = "bbhost-0.4.0-fps49";
+        /// <summary>The engine build this launcher is made for (package.json "engine"; the release
+        /// workflow reads it from here). Change it whenever engine/bbhost-changes.patch changes, so
+        /// installed packages take the whole new package and not only the launcher.</summary>
+        public const string EngineId = "bbhost-0.4.0-fps49-audemed44.1";
 
         private const string ExeName = "Bloodborne Launcher.exe";
         private const string PackageFile = "package.json";

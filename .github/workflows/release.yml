@@ -1,0 +1,158 @@
+name: Build and release
+
+# Builds the engine (engine/bbhost-changes.patch on DarkIzuku/bloodborne_pc, MSYS2 CLANG64) and
+# the launcher, and packs them as BloodbornePC-v<version>-win64.zip like the upstream releases.
+# Files this repository cannot build (embedded Python, DLSS, FSR 4 runtime and models, the
+# Bloodborne.exe shortcut, default bbport.ini) come from BASE_PACKAGE, the upstream package that
+# matches this source; the built engine, its DLLs, scripts, patches and launcher replace its own.
+#
+# Run it from the Actions tab (Run workflow) with a version: it publishes release v<version>,
+# which the launcher's updater (Core/Updater.cs) picks up. "0.9.30-beta.1" makes a pre-release.
+# A push that touches the engine, launcher or this file only builds the package as an artifact.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version (e.g. 0.9.30, or 0.9.30-beta.1 for a pre-release)"
+        required: true
+  push:
+    paths:
+      - "engine/**"
+      - "launcher/**"
+      - "tools/release-assets.ps1"
+      - ".github/workflows/release.yml"
+
+env:
+  ENGINE_REPO: https://github.com/DarkIzuku/bloodborne_pc
+  ENGINE_TAG: v0.4.0-darkizuku-preview.1
+  BASE_PACKAGE: https://github.com/Awakenchan/BloodBorneButPc/releases/download/v0.9.29/BloodbornePC-v0.9.29-win64.zip
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'push' }}
+
+jobs:
+  engine:
+    runs-on: windows-latest
+    timeout-minutes: 180
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: fork
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: CLANG64
+          update: true
+          install: git
+          pacboy: >-
+            clang:p lld:p libc++:p cmake:p ninja:p pkgconf:p python:p sdl3:p boost:p fmt:p
+            glslang:p spirv-cross:p spirv-headers:p vulkan-headers:p vulkan-loader:p
+            vulkan-memory-allocator:p xxhash:p zydis:p robin-map:p ffmpeg:p
+            protobuf:p nlohmann-json:p openssl:p zlib:p miniupnpc:p
+
+      - name: Engine source with this fork's changes
+        run: |
+          git -c advice.detachedHead=false clone --depth 1 --branch "$ENGINE_TAG" --recurse-submodules "$ENGINE_REPO" src
+          cd src
+          git apply --whitespace=nowarn ../fork/engine/bbhost-changes.patch
+          cp ../fork/engine/win_compat.h gpu/
+
+      - name: Build
+        working-directory: src
+        env:
+          BB_PGO: "off"
+        run: |
+          export CFLAGS="-Wno-error=unused-but-set-global"
+          export CXXFLAGS="-include $PWD/gpu/win_compat.h"
+          bash build.sh || { tail -200 out/gpu-build.log 2>/dev/null; exit 1; }
+
+      - name: Collect the engine and the DLLs it loads
+        working-directory: src
+        run: |
+          stage=../engine-out
+          mkdir -p "$stage/out"
+          cp out/bb-probe.exe out/bb-gpu-capabilities.exe out/bb-engine-assets*.exe "$stage/out/"
+          for exe in "$stage"/out/*.exe; do
+            ldd "$exe" | awk '$3 ~ /^\/clang64\// { print $3 }'
+          done | sort -u | xargs -r cp -t "$stage/out/"
+          cp -r scripts patches "$stage/"
+          ls -la "$stage/out"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: engine
+          path: engine-out
+          retention-days: 7
+
+  package:
+    needs: engine
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: engine
+          path: engine-out
+
+      - name: Version and engine id
+        id: meta
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          $version = if ($env:GITHUB_EVENT_NAME -eq 'workflow_dispatch') { $env:INPUT_VERSION.Trim().TrimStart('v') } else { "0.0.$env:GITHUB_RUN_NUMBER" }
+          if ($version -notmatch '^\d+\.\d+\.\d+(-beta\.\d+)?$') { throw "Version '$version' is not like 0.9.30 or 0.9.30-beta.1" }
+          $updater = Get-Content -Raw launcher/windows/BloodborneLauncher/Core/Updater.cs
+          if ($updater -notmatch 'EngineId = "([^"]+)"') { throw 'EngineId not found in Updater.cs' }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "engine=$($Matches[1])" >> $env:GITHUB_OUTPUT
+          "prerelease=$($version -like '*-beta*')" >> $env:GITHUB_OUTPUT
+          "Version $version, engine $($Matches[1])"
+
+      - name: Base package
+        run: |
+          Invoke-WebRequest $env:BASE_PACKAGE -OutFile base.zip
+          Expand-Archive base.zip -DestinationPath base
+          $pkg = Get-ChildItem base -Directory | Select-Object -First 1
+          if (-not (Test-Path "$($pkg.FullName)\out\bb-probe.exe")) { throw "No out\bb-probe.exe in the base package" }
+          # The built engine, its DLLs, scripts and patches over the base package's own.
+          Copy-Item engine-out\* $pkg.FullName -Recurse -Force
+          "PKG=$($pkg.FullName)" >> $env:GITHUB_ENV
+
+      - name: Release files
+        run: |
+          & ./tools/release-assets.ps1 -Version '${{ steps.meta.outputs.version }}' -Engine '${{ steps.meta.outputs.engine }}' -Package $env:PKG -Dist dist
+          exit 0
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BloodbornePC-v${{ steps.meta.outputs.version }}-win64
+          path: |
+            dist/BloodbornePC-v${{ steps.meta.outputs.version }}-win64.zip
+            dist/package.json
+          retention-days: 14
+
+      - name: Publish release
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          $notes = "Built from $env:GITHUB_SHA (engine ${{ steps.meta.outputs.engine }}).`n`nDownload BloodbornePC-v$env:VERSION-win64.zip, extract it and run Bloodborne Launcher.exe."
+          $flags = @()
+          if ('${{ steps.meta.outputs.prerelease }}' -eq 'True') { $flags += '--prerelease' }
+          gh release create "v$env:VERSION" --target $env:GITHUB_SHA --title "Bloodborne PC v$env:VERSION" --notes $notes @flags `
+            "dist/BloodbornePC-v$env:VERSION-win64.zip" "dist/launcher/Bloodborne Launcher.exe" dist/package.json

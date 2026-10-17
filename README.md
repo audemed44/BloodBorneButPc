@@ -13,6 +13,17 @@ Bloodborne on Windows: a launcher and my engine, built on bbport and shadPS4 and
 2. Run `Bloodborne Launcher.exe` and pick your game folder (the one with `eboot.bin`).
 3. Press **Play**. The launcher updates itself.
 
+## This fork
+
+Adds cheats that keep working online (Blood Vials, Quicksilver Bullets, echo multiplier, behind
+**Keep some cheats online** on the Cheats page) and finer echo multipliers (x1.25 to x10). The
+launcher updates from this fork's releases.
+
+To make a release: **Actions** › **Build and release** › **Run workflow**, enter a version
+(`0.9.30`, or `0.9.30-beta.1` for a pre-release). The workflow builds the engine and launcher
+and publishes `BloodbornePC-v<version>-win64.zip`. When `engine/bbhost-changes.patch` changes,
+bump `EngineId` in `launcher/windows/BloodborneLauncher/Core/Updater.cs`.
+
 ## Credits
 
 | | |

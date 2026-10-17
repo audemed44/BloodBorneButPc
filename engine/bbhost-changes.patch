@@ -172955,7 +172955,7 @@ new file mode 100644
 index 0000000..a9898d8
 --- /dev/null
 +++ b/gpu/shim/engine/cheats.cpp
-@@ -0,0 +1,1056 @@
+@@ -0,0 +1,1070 @@
 +// SPDX-License-Identifier: GPL-3.0-or-later
 +// Live cheats: Blood Vials (goods 1000) and Quicksilver Bullets (goods 900), each off, infinite
 +// or kept at an amount (bbport.ini cheat_vials / cheat_bullets, the overlay's Cheats section).
@@ -173536,6 +173536,19 @@ index 0000000..a9898d8
 +    return shared;
 +}
 +
++// BB_ONLINE_ITEM_CHEATS=1 (the launcher's "Keep Blood Vials and Bullets online"): the Blood Vial
++// and Quicksilver Bullet cheats still run online; every other cheat stays off there.
++bool ItemsShared() {
++    static const bool shared = [] {
++        if (!SharedWorld()) return false;
++        const char* items = std::getenv("BB_ONLINE_ITEM_CHEATS");
++        const bool kept = items && items[0] == '1';
++        if (kept) std::printf("Cheats: Blood Vials and Quicksilver Bullets kept on while playing online\n");
++        return !kept;
++    }();
++    return shared;
++}
++
 +int SettingOf(const Extra& e, const BbSettings::Values& s) {
 +    switch (e.which) {
 +    case Stamina: return s.cheat_stamina.load(std::memory_order_relaxed);
@@ -173955,8 +173968,9 @@ index 0000000..a9898d8
 +        g_add_echoes.store(0, std::memory_order_relaxed);
 +        g_add_insight.store(0, std::memory_order_relaxed);
 +    }
-+    const int settings[2] = {shared ? BbSettings::CheatOff : s.cheat_vials.load(std::memory_order_relaxed),
-+                             shared ? BbSettings::CheatOff : s.cheat_bullets.load(std::memory_order_relaxed)};
++    const bool items_shared = ItemsShared();
++    const int settings[2] = {items_shared ? BbSettings::CheatOff : s.cheat_vials.load(std::memory_order_relaxed),
++                             items_shared ? BbSettings::CheatOff : s.cheat_bullets.load(std::memory_order_relaxed)};
 +    bool idle = g_add_echoes.load(std::memory_order_relaxed) <= 0 && g_add_insight.load(std::memory_order_relaxed) <= 0;
 +    for (int i = 0; i < 2; ++i) {
 +        const Cheat& c = g_cheats[i];

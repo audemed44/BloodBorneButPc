@@ -177,6 +177,8 @@ namespace BloodborneLauncher.Core
                 env["BB_PIPELINE_TAKE"] = "0";
             }
             if (s.Bool("section_stats")) env["BB_SECTIONS"] = "1";
+            // Blood Vial and Quicksilver Bullet cheats keep running online (the engine turns every cheat off there otherwise).
+            if (s.Bool("cheat_items_online")) env["BB_ONLINE_ITEM_CHEATS"] = "1";
             if (s.Bool("safe_mode_next"))
             {
                 // Safe mode (after a crash, one run): every experimental engine option and the mods off.

@@ -67,7 +67,8 @@ jobs:
           BB_PGO: "off"
         run: |
           export CFLAGS="-Wno-error=unused-but-set-global"
-          export CXXFLAGS="-include $PWD/gpu/win_compat.h"
+          # A Windows path: clang is a native program and cannot open /d/a/... paths.
+          export CXXFLAGS="-include $(cygpath -m "$PWD/gpu/win_compat.h")"
           bash build.sh || { tail -200 out/gpu-build.log 2>/dev/null; exit 1; }
 
       - name: Collect the engine and the DLLs it loads
